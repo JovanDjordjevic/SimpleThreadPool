@@ -3,3 +3,6 @@ test.txt
 
 .vscode
 build
+
+*.out
+*.exe

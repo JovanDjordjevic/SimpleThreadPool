@@ -5,24 +5,6 @@
 
 #include "simpleThreadPool.hpp"
 
-void printStandard() {
-    int s = __cplusplus;
-    if (__cplusplus == 201103L) {
-        s = 11;
-    }
-    else if (__cplusplus == 201402L) {
-        s = 14;
-    }
-    else if (__cplusplus == 201703L) {
-        s = 17;
-    }
-    else if (__cplusplus == 202002L) {
-        s = 20;
-    }
-
-    std::cout << "STANDARD IS: C++" << s << std::endl;
-} 
-
 void f (std::string& s) {
     s = "\nbind f\n";
     std::cout << s << std::endl;
@@ -56,11 +38,7 @@ int foo1(int x) {
 
 
 int main() {
-    printStandard();
-
     simpleThreadPool::ThreadPool pool;
-
-    std::this_thread::sleep_for(std::chrono::seconds(2));
 
     auto f1 = pool.queueJob(hello);
     f1.get();

@@ -23,27 +23,36 @@ namespace simpleThreadPool {
         private:
             void workerThread();
 
+            bool shouldTerminateWorkers;
             unsigned int numThreads;
-            std::mutex jobQueueAccess;
+            std::vector<std::thread> workers;
+            std::mutex jobQueueMutex;
             std::condition_variable cond;
-            std::vector<std::thread> pool;
-            std::queue<std::function<void()>> jobs;
+            std::queue<std::function<void()>> jobQueue;
     };
 } // namespace simpleThreadPool
 
 //------------------------------------- IMPLEMENTATION -------------------------------------
 
 namespace simpleThreadPool {
-    ThreadPool::ThreadPool(const unsigned numThreads) : numThreads(numThreads) {
-        pool.resize(numThreads);
+    ThreadPool::ThreadPool(const unsigned numThreads) 
+        : shouldTerminateWorkers(false), numThreads(numThreads), workers(numThreads)
+    {
         for (unsigned i = 0; i < numThreads; ++i) {
-            pool.at(i) = std::thread(&ThreadPool::workerThread, this);
+            workers.at(i) = std::thread(&ThreadPool::workerThread, this);
         }
     }
 
     ThreadPool::~ThreadPool() {
-        for (auto& thread : pool) {
-            thread.join();
+        {
+            std::unique_lock<std::mutex> jobQueueLock(jobQueueMutex);
+            shouldTerminateWorkers = true;
+        }
+
+        cond.notify_all();
+
+        for (auto& worker : workers) {
+            worker.join();
         }
     }
 
@@ -53,9 +62,13 @@ namespace simpleThreadPool {
         std::future<R> jobFuture = jobPromise->get_future();
 
         {
-            std::unique_lock<std::mutex> lock(jobQueueAccess);
+            std::unique_lock<std::mutex> jobQueueLock(jobQueueMutex);
 
-            jobs.emplace([func, args..., jobPromise](){
+            if(shouldTerminateWorkers) {
+                throw std::runtime_error("Cannot enqueue additional jobs when trying to terminate workers!");
+            }
+
+            jobQueue.emplace([func, args..., jobPromise](){
                 try {
                     if constexpr (std::is_void_v<R>) {
                         func(args...);
@@ -75,22 +88,28 @@ namespace simpleThreadPool {
         }
 
         cond.notify_one();
+
         return jobFuture;
     }
 
     void ThreadPool::workerThread() {
+        std::function<void()> job;
+
         while (true) {
-            std::function<void()> job;
-
             {
-                std::unique_lock<std::mutex> lock(jobQueueAccess);
+                std::unique_lock<std::mutex> jobQueueLock(jobQueueMutex);
                 
-                cond.wait(lock, [this] { return !jobs.empty(); });
+                cond.wait(jobQueueLock, [this](){
+                    return shouldTerminateWorkers || !jobQueue.empty();
+                });
 
-                // ...
+                // immediately terminate even though there might be some left over jobs in the queue that are not started
+                if (shouldTerminateWorkers) {
+                    return;
+                }
 
-                job = jobs.front();
-                jobs.pop();
+                job = jobQueue.front();
+                jobQueue.pop();
             }
 
             job();
