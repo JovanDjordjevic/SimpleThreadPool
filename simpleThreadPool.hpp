@@ -3,6 +3,7 @@
 
 #include <condition_variable>
 #include <functional>
+#include <future>
 #include <mutex>
 #include <queue>
 #include <thread>
@@ -16,8 +17,8 @@ namespace simpleThreadPool {
             ThreadPool(const unsigned numThreads = std::thread::hardware_concurrency());
             ~ThreadPool();
 
-            template<typename F, typename... Args>
-            void queueJob(F&& f, Args&&... args);
+            template <typename F, typename... Args, typename R = std::invoke_result_t<std::decay_t<F>, std::decay_t<Args>...>>
+            std::future<R> queueJob(const F& func, const Args&... args);
         
         private:
             void workerThread();
@@ -46,14 +47,35 @@ namespace simpleThreadPool {
         }
     }
 
-    template<typename F, typename... Args>
-    void ThreadPool::queueJob(F&& f, Args&&... args) {
+    template <typename F, typename... Args, typename R>
+    std::future<R> ThreadPool::queueJob(const F& func, const Args&... args) {
+        std::shared_ptr<std::promise<R>> jobPromise = std::make_shared<std::promise<R>>();
+        std::future<R> jobFuture = jobPromise->get_future();
+
         {
             std::unique_lock<std::mutex> lock(jobQueueAccess);
-            jobs.push(std::bind(std::move(f), std::forward<Args>(args)...));
+
+            jobs.emplace([func, args..., jobPromise](){
+                try {
+                    if constexpr (std::is_void_v<R>) {
+                        func(args...);
+                        jobPromise->set_value();
+                    }
+                    else {
+                        jobPromise->set_value(func(args...));
+                    }
+                }
+                catch (...) {
+                    try {
+                        jobPromise->set_exception(std::current_exception());
+                    }
+                    catch (...) {}
+                }
+            });
         }
 
         cond.notify_one();
+        return jobFuture;
     }
 
     void ThreadPool::workerThread() {

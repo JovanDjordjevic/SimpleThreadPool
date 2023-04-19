@@ -1,10 +1,27 @@
 #include <string>
 #include <iostream>
 #include <chrono>
+#include <type_traits>
 
 #include "simpleThreadPool.hpp"
 
-using namespace std::chrono_literals;
+void printStandard() {
+    int s = __cplusplus;
+    if (__cplusplus == 201103L) {
+        s = 11;
+    }
+    else if (__cplusplus == 201402L) {
+        s = 14;
+    }
+    else if (__cplusplus == 201703L) {
+        s = 17;
+    }
+    else if (__cplusplus == 202002L) {
+        s = 20;
+    }
+
+    std::cout << "STANDARD IS: C++" << s << std::endl;
+} 
 
 void f (std::string& s) {
     s = "\nbind f\n";
@@ -17,25 +34,45 @@ void f1 (int x, int& y, std::string z) {
     z = "aaa";
 }
 
+// does not return, no arguments
+void hello() {
+    std::cout << "Hello world" << std::endl;
+}
+
+// does not return, with arguments
+void hello1(const std::vector<int>& x) {
+
+}
+
+// returns, no arguments
+double foo() {
+    return 0.0;
+}
+
+// returns, with arguments
+int foo1(int x) {
+    return x;
+}
+
+
 int main() {
-    std::string s = "aa";
-    std::cout << s << std::endl;
-
-    std::thread thr(f, std::ref(s));
-    thr.join();
-
-    std::cout << s << std::endl;
+    printStandard();
 
     simpleThreadPool::ThreadPool pool;
 
-    pool.queueJob([](){std::cout << "\nlambda\n" << std::endl;});
-    pool.queueJob(std::bind(f, std::ref(s)));
-    int x = 1, y = 0;
-    std::string tmp("tmp");
-    pool.queueJob(f1, x, std::ref(y), tmp);
+    std::this_thread::sleep_for(std::chrono::seconds(2));
 
-    std::this_thread::sleep_for(2s);
-    std::cout << x << " " << y << " " << tmp << std::endl;
+    auto f1 = pool.queueJob(hello);
+    f1.get();
+    std::cout << "f1 get called" << std::endl; 
 
-    std::this_thread::sleep_for(10s);
+    auto f2 = pool.queueJob(hello1, std::vector<int>{});
+    f2.get();
+    std::cout << "f2 get called" << std::endl;
+
+    auto f3 = pool.queueJob(foo);
+    std::cout << "f3 " << f3.get() << std::endl;
+
+    auto f4 = pool.queueJob(foo1, 1);
+    std::cout << "f4 " << f4.get() << std::endl;
 }
