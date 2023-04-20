@@ -1,6 +1,7 @@
 #ifndef __SIMPLE_THREAD_POOL__
 #define __SIMPLE_THREAD_POOL__
 
+#include <atomic>
 #include <condition_variable>
 #include <functional>
 #include <future>
@@ -19,12 +20,17 @@ namespace simpleThreadPool {
 
             template <typename F, typename... Args, typename R = std::invoke_result_t<std::decay_t<F>, std::decay_t<Args>...>>
             std::future<R> queueJob(const F& func, const Args&... args);
+
+            size_t countQueuedJobs();
+            size_t countOngoingJobs();
+            size_t countTotalJobs();
         
         private:
             void workerThread();
 
             bool shouldTerminateWorkers;
             unsigned int numThreads;
+            std::atomic_uint ongoingJobs;
             std::vector<std::thread> workers;
             std::mutex jobQueueMutex;
             std::condition_variable cond;
@@ -36,7 +42,7 @@ namespace simpleThreadPool {
 
 namespace simpleThreadPool {
     ThreadPool::ThreadPool(const unsigned numThreads) 
-        : shouldTerminateWorkers(false), numThreads(numThreads), workers(numThreads)
+        : shouldTerminateWorkers(false), numThreads(numThreads), ongoingJobs(0), workers(numThreads)
     {
         for (unsigned i = 0; i < numThreads; ++i) {
             workers.at(i) = std::thread(&ThreadPool::workerThread, this);
@@ -92,6 +98,19 @@ namespace simpleThreadPool {
         return jobFuture;
     }
 
+    size_t ThreadPool::countQueuedJobs() {
+        std::unique_lock<std::mutex> jobQueueLock(jobQueueMutex);
+        return jobQueue.size();
+    }
+
+    size_t ThreadPool::countOngoingJobs() {
+        return static_cast<size_t>(ongoingJobs);
+    }
+
+    size_t ThreadPool::countTotalJobs() {
+        return countQueuedJobs() + countOngoingJobs();
+    }
+
     void ThreadPool::workerThread() {
         std::function<void()> job;
 
@@ -112,7 +131,9 @@ namespace simpleThreadPool {
                 jobQueue.pop();
             }
 
+            ++ongoingJobs;
             job();
+            --ongoingJobs;
         }
     }
 } // namespace simpleThreadPool
