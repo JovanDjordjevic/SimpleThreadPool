@@ -21,6 +21,8 @@ namespace simpleThreadPool {
             template <typename F, typename... Args, typename R = std::invoke_result_t<std::decay_t<F>, std::decay_t<Args>...>>
             std::future<R> queueJob(const F& func, const Args&... args);
 
+            void clearQueue();
+
             size_t countQueuedJobs();
             size_t countOngoingJobs();
             size_t countTotalJobs();
@@ -109,6 +111,12 @@ namespace simpleThreadPool {
 
     size_t ThreadPool::countTotalJobs() {
         return countQueuedJobs() + countOngoingJobs();
+    }
+
+    void ThreadPool::clearQueue() {
+        std::unique_lock<std::mutex> jobQueueLock(jobQueueMutex);
+        jobQueue = {};
+        return;
     }
 
     void ThreadPool::workerThread() {
