@@ -21,6 +21,7 @@ namespace simpleThreadPool {
             template <typename F, typename... Args, typename R = std::invoke_result_t<std::decay_t<F>, std::decay_t<Args>...>>
             std::future<R> queueJob(const F& func, const Args&... args);
 
+            void waitForAllJobsToFinish();
             void clearQueue();
 
             size_t countQueuedJobs();
@@ -30,12 +31,15 @@ namespace simpleThreadPool {
         private:
             void workerThread();
 
-            bool shouldTerminateWorkers;
-            unsigned int numThreads;
-            std::atomic_uint ongoingJobs;
+            const unsigned int numThreads;
+            std::atomic<bool> shouldTerminateWorkers;
+            std::atomic<bool> queueJobAllowed;
+            std::atomic<unsigned int> ongoingJobs;
+            std::atomic<unsigned int> jobQueueSize;
             std::vector<std::thread> workers;
             std::mutex jobQueueMutex;
-            std::condition_variable cond;
+            std::condition_variable condQueue;
+            std::condition_variable condJobFinished;
             std::queue<std::function<void()>> jobQueue;
     };
 } // namespace simpleThreadPool
@@ -44,7 +48,7 @@ namespace simpleThreadPool {
 
 namespace simpleThreadPool {
     ThreadPool::ThreadPool(const unsigned numThreads) 
-        : shouldTerminateWorkers(false), numThreads(numThreads), ongoingJobs(0), workers(numThreads)
+        : numThreads(numThreads), shouldTerminateWorkers(false), queueJobAllowed(true), ongoingJobs(0), jobQueueSize(0), workers(numThreads)
     {
         for (unsigned i = 0; i < numThreads; ++i) {
             workers.at(i) = std::thread(&ThreadPool::workerThread, this);
@@ -52,12 +56,12 @@ namespace simpleThreadPool {
     }
 
     ThreadPool::~ThreadPool() {
-        {
-            std::unique_lock<std::mutex> jobQueueLock(jobQueueMutex);
-            shouldTerminateWorkers = true;
-        }
+        queueJobAllowed = false;
 
-        cond.notify_all();
+        waitForAllJobsToFinish();
+
+        shouldTerminateWorkers = true;
+        condQueue.notify_all();
 
         for (auto& worker : workers) {
             worker.join();
@@ -72,7 +76,7 @@ namespace simpleThreadPool {
         {
             std::unique_lock<std::mutex> jobQueueLock(jobQueueMutex);
 
-            if(shouldTerminateWorkers) {
+            if(!queueJobAllowed) {
                 throw std::runtime_error("Cannot enqueue additional jobs when trying to terminate workers!");
             }
 
@@ -93,16 +97,17 @@ namespace simpleThreadPool {
                     catch (...) {}
                 }
             });
+
+            ++jobQueueSize;
         }
 
-        cond.notify_one();
+        condQueue.notify_one();
 
         return jobFuture;
     }
 
     size_t ThreadPool::countQueuedJobs() {
-        std::unique_lock<std::mutex> jobQueueLock(jobQueueMutex);
-        return jobQueue.size();
+        return static_cast<size_t>(jobQueueSize);
     }
 
     size_t ThreadPool::countOngoingJobs() {
@@ -113,9 +118,19 @@ namespace simpleThreadPool {
         return countQueuedJobs() + countOngoingJobs();
     }
 
+    void ThreadPool::waitForAllJobsToFinish() {
+        {
+            std::unique_lock<std::mutex> jobQueueLock(jobQueueMutex);
+            condJobFinished.wait(jobQueueLock, [this](){
+                return countTotalJobs() == 0;
+            }); 
+        }
+    }
+
     void ThreadPool::clearQueue() {
         std::unique_lock<std::mutex> jobQueueLock(jobQueueMutex);
         jobQueue = {};
+        jobQueueSize = 0;
         return;
     }
 
@@ -126,11 +141,10 @@ namespace simpleThreadPool {
             {
                 std::unique_lock<std::mutex> jobQueueLock(jobQueueMutex);
                 
-                cond.wait(jobQueueLock, [this](){
+                condQueue.wait(jobQueueLock, [this](){
                     return shouldTerminateWorkers || !jobQueue.empty();
                 });
 
-                // immediately terminate even though there might be some left over jobs in the queue that are not started
                 if (shouldTerminateWorkers) {
                     return;
                 }
@@ -140,8 +154,11 @@ namespace simpleThreadPool {
             }
 
             ++ongoingJobs;
+            --jobQueueSize;
             job();
             --ongoingJobs;
+
+            condJobFinished.notify_one();
         }
     }
 } // namespace simpleThreadPool

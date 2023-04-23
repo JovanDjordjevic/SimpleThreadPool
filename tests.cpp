@@ -61,7 +61,15 @@ int main() {
     std::cout << "f3 " << f3.get() << std::endl;
     std::cout << "f4 " << f4.get() << std::endl;
 
+    for (auto i = 0; i < 32; ++i) {
+        pool.queueJob([](){
+            std::this_thread::sleep_for(std::chrono::seconds(2));
+        });
+    }
+
     std::cout << "queued: " << pool.countQueuedJobs() << " ongoing: " << pool.countOngoingJobs() << " total: " << pool.countTotalJobs() << std::endl;
+
+    pool.waitForAllJobsToFinish();
 
     for (auto i = 0; i < 10000; ++i) {
         pool.queueJob([](){
@@ -76,4 +84,6 @@ int main() {
     std::cout << "queued: " << pool.countQueuedJobs() << " ongoing: " << pool.countOngoingJobs() << " total: " << pool.countTotalJobs() << std::endl;
     std::this_thread::sleep_for(std::chrono::seconds(2));
     std::cout << "queued: " << pool.countQueuedJobs() << " ongoing: " << pool.countOngoingJobs() << " total: " << pool.countTotalJobs() << std::endl;
+
+    return 0;
 }
