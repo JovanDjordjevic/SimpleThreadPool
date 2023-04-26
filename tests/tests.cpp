@@ -3,7 +3,7 @@
 #include <chrono>
 #include <type_traits>
 
-#include "simpleThreadPool.hpp"
+#include "simpleThreadPool/simpleThreadPool.hpp"
 
 void f (std::string& s) {
     s = "\nbind f\n";
