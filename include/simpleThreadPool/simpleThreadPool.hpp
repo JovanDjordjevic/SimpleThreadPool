@@ -12,20 +12,41 @@
 
 //------------------------------------- API -------------------------------------
 
+/// @brief Namespace containing all relevant classes and functions
 namespace simpleThreadPool {
+
+    /// @brief Class representing the thread pool
+    /// @details The user can specify number of execution threads and add jobs to be executed by them
     class ThreadPool {
         public:
+            /// @brief Constructor
+            /// @param[in] numThreads Number of worker threads to accept jobs in the thread pool
             ThreadPool(const unsigned numThreads = std::thread::hardware_concurrency());
+            /// @brief Destructor
+            /// @details Waits for all queued jobs to finish and then joins the worker threads
+            /// Jobs cannot be added to the queue while destructor is executing
             ~ThreadPool();
 
+            /// @brief Function to add a job to be executed by the thread pool
+            /// @details A job to be queued may be a funcion, lambda, function object etc, that may or may not have arguments and/or return type
+            /// Use the returned future object to extract the function return type or to wait for a specific job to finish before continuing execution of your program
+            /// @tparam R is deduced to the function return type if the function returns something, or void if function has void return type
+            /// @param[in] func Function to queue
+            /// @param[in] args Function arguments(if it has any)
+            /// @return A std::future<void> if the queued function has no return type, or std::future<R> if queued function has return type R
             template <typename F, typename... Args, typename R = std::invoke_result_t<std::decay_t<F>, std::decay_t<Args>...>>
             std::future<R> queueJob(const F& func, const Args&... args);
 
+            /// @brief Function that can be called to wait for all currently queued jobs to finish
             void waitForAllJobsToFinish();
+            /// @brief Removes all queued jobs that are not currently in execution from the queue
             void clearQueue();
 
+            /// @brief Get number of queued jobs that are still not executing
             size_t countQueuedJobs();
+            /// @brief Get number of jobs that are currently executing
             size_t countOngoingJobs();
+            /// @brief Get number of total jobs in the thread pool (queued + ongoing) 
             size_t countTotalJobs();
         
         private:

@@ -4,5 +4,7 @@ test.txt
 .vscode
 build
 
+docs/html
+
 *.out
 *.exe
