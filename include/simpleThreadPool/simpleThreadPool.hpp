@@ -44,6 +44,11 @@ namespace simpleThreadPool {
 
             /// @brief Get number of worker threads
             size_t getPoolSize() const;
+            /// @brief Change the number of worker threads in the pool
+            /// @details Waits for all jobs in the queue to finish, joins all worker threads, then creates new worker threads
+            /// Jobs cannot be added to the queue while resizing is in progress
+            /// @param newSize New number of worker threads in the pool
+            void resizePool(const size_t newSize);
 
             /// @brief Get number of queued jobs that are still not executing
             size_t countQueuedJobs();
@@ -160,6 +165,37 @@ namespace simpleThreadPool {
 
     size_t ThreadPool::getPoolSize() const {
         return workers.size();
+    }
+    
+    void ThreadPool::resizePool(const size_t newSize) {
+        if (newSize == workers.size()) {
+            return;
+        }
+        else {
+            queueJobAllowed = false;
+
+            waitForAllJobsToFinish();
+
+            shouldTerminateWorkers = true;
+            condQueue.notify_all();
+
+            for (auto& worker : workers) {
+                worker.join();
+            }
+
+            shouldTerminateWorkers = false;
+            
+            workers.clear();
+            workers.reserve(newSize);
+
+            for (unsigned i = 0; i < newSize; ++i) {
+                workers.emplace_back(&ThreadPool::workerThread, this);
+            }
+
+            queueJobAllowed = true;
+
+            return;
+        }
     }
 
     void ThreadPool::workerThread() {

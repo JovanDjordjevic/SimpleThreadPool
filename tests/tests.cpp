@@ -38,7 +38,6 @@ int foo1(int x) {
 
 int main() {
     simpleThreadPool::ThreadPool pool;
-
     std::cout << "Pool size: " << pool.getPoolSize() << std::endl;
 
     std::cout << "queued: " << pool.countQueuedJobs() << " ongoing: " << pool.countOngoingJobs() << " total: " << pool.countTotalJobs() << std::endl;
@@ -86,6 +85,24 @@ int main() {
     std::cout << "queued: " << pool.countQueuedJobs() << " ongoing: " << pool.countOngoingJobs() << " total: " << pool.countTotalJobs() << std::endl;
     std::this_thread::sleep_for(std::chrono::seconds(2));
     std::cout << "queued: " << pool.countQueuedJobs() << " ongoing: " << pool.countOngoingJobs() << " total: " << pool.countTotalJobs() << std::endl;
+
+    for (auto i = 0; i < 8; ++i) {
+        pool.queueJob([](){
+            std::this_thread::sleep_for(std::chrono::seconds(2));
+        });
+    }
+
+    pool.resizePool(32);
+    std::cout << "Pool size: " << pool.getPoolSize() << std::endl;
+
+    for (auto i = 0; i < 32; ++i) {
+        pool.queueJob([](){
+            std::this_thread::sleep_for(std::chrono::seconds(2));
+        });
+    }
+
+    pool.resizePool(4);
+    std::cout << "Pool size: " << pool.getPoolSize() << std::endl;
 
     return 0;
 }
