@@ -39,6 +39,8 @@ int foo1(int x) {
 int main() {
     simpleThreadPool::ThreadPool pool;
 
+    std::cout << "Pool size: " << pool.getPoolSize() << std::endl;
+
     std::cout << "queued: " << pool.countQueuedJobs() << " ongoing: " << pool.countOngoingJobs() << " total: " << pool.countTotalJobs() << std::endl;
 
     auto f1 = pool.queueJob(hello);

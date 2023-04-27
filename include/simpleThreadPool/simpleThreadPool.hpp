@@ -42,6 +42,9 @@ namespace simpleThreadPool {
             /// @brief Removes all queued jobs that are not currently in execution from the queue
             void clearQueue();
 
+            /// @brief Get number of worker threads
+            size_t getPoolSize() const;
+
             /// @brief Get number of queued jobs that are still not executing
             size_t countQueuedJobs();
             /// @brief Get number of jobs that are currently executing
@@ -153,6 +156,10 @@ namespace simpleThreadPool {
         jobQueue = {};
         jobQueueSize = 0;
         return;
+    }
+
+    size_t ThreadPool::getPoolSize() const {
+        return workers.size();
     }
 
     void ThreadPool::workerThread() {
