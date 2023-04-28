@@ -104,5 +104,24 @@ int main() {
     pool.resizePool(4);
     std::cout << "Pool size: " << pool.getPoolSize() << std::endl;
 
+    std::vector<std::function<int()>> v1 = {std::bind(foo1, 2)};
+    v1.emplace_back(std::bind([](const int x){ return x; }, 3));
+    v1.emplace_back(std::bind([](bool b){ return 12; }, true));
+    v1.emplace_back([](){ return 22; });
+
+    auto futures1 = pool.queueAndWaitForJobs(v1);
+
+    for (auto& fut : futures1) {
+        std::cout << fut.get() << " ";
+    }
+    std::cout << std::endl;
+
+    std::vector<std::function<void()>> v2 = {std::bind([](int x){return;}, 2), [](){}};
+    auto futures2 = pool.queueAndWaitForJobs(v2);
+
+    for (auto& fut : futures2) {
+        fut.get();
+    }
+
     return 0;
 }

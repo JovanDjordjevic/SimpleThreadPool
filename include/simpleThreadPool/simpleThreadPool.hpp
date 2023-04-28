@@ -36,6 +36,21 @@ namespace simpleThreadPool {
             /// @return A std::future<void> if the queued function has no return type, or std::future<R> if queued function has return type R
             template <typename F, typename... Args, typename R = std::invoke_result_t<std::decay_t<F>, std::decay_t<Args>...>>
             std::future<R> queueJob(const F& func, const Args&... args);
+            
+            /// @brief Function to add multiple jobs to the queue and wait for them to finish
+            /// @details Functions added this way must share a return type (that may be void), and have no arguments
+            /// @note If functions need to have arguments, use std::bind for them while creating the vector, for example:
+            /// ```
+            /// std::vector<std::function<int()>> vect = {
+            ///     std::bind([](int x){return x;}, 2), 
+            ///     std::bind([](int x, int y){return x + y;}, 2, 3)
+            /// };
+            /// ```
+            /// @tparam R is deduced to the function return type if the function returns something, or void if function has void return type
+            /// @param[in] functions Vector of jobs to be queued
+            /// @return A vector of std::future objects that can be used to extract the return value from enqueued functions
+            template <typename R>
+            std::vector<std::future<R>> queueAndWaitForJobs(const std::vector<std::function<R()>>& functions);
 
             /// @brief Function that can be called to wait for all currently queued jobs to finish
             void waitForAllJobsToFinish();
@@ -133,6 +148,22 @@ namespace simpleThreadPool {
         condQueue.notify_one();
 
         return jobFuture;
+    }
+
+    template <typename R>
+    std::vector<std::future<R>> ThreadPool::queueAndWaitForJobs(const std::vector<std::function<R()>>& functions) {
+        std::vector<std::future<R>> futures;
+        futures.reserve(functions.size());
+
+        for (auto& func : functions) {
+            futures.emplace_back(queueJob(func));
+        }
+
+        for (auto& f : futures) {
+            f.wait();
+        }
+
+        return futures;
     }
 
     size_t ThreadPool::countQueuedJobs() {
