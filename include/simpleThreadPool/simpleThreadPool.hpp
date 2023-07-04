@@ -66,16 +66,15 @@ namespace simpleThreadPool {
             void resizePool(const size_t newSize);
 
             /// @brief Get number of queued jobs that are still not executing
-            size_t countQueuedJobs();
+            size_t countQueuedJobs() const;
             /// @brief Get number of jobs that are currently executing
-            size_t countOngoingJobs();
+            size_t countOngoingJobs() const;
             /// @brief Get number of total jobs in the thread pool (queued + ongoing) 
-            size_t countTotalJobs();
+            size_t countTotalJobs() const;
         
         private:
             void workerThread();
 
-            const unsigned int numThreads;
             std::atomic<bool> shouldTerminateWorkers;
             std::atomic<bool> queueJobAllowed;
             std::atomic<unsigned int> ongoingJobs;
@@ -92,7 +91,7 @@ namespace simpleThreadPool {
 
 namespace simpleThreadPool {
     ThreadPool::ThreadPool(const unsigned numThreads) 
-        : numThreads(numThreads), shouldTerminateWorkers(false), queueJobAllowed(true), ongoingJobs(0), jobQueueSize(0), workers(numThreads)
+        : shouldTerminateWorkers(false), queueJobAllowed(true), ongoingJobs(0), jobQueueSize(0), workers(numThreads)
     {
         for (unsigned i = 0; i < numThreads; ++i) {
             workers.at(i) = std::thread(&ThreadPool::workerThread, this);
@@ -166,25 +165,23 @@ namespace simpleThreadPool {
         return futures;
     }
 
-    size_t ThreadPool::countQueuedJobs() {
+    size_t ThreadPool::countQueuedJobs() const {
         return static_cast<size_t>(jobQueueSize);
     }
 
-    size_t ThreadPool::countOngoingJobs() {
+    size_t ThreadPool::countOngoingJobs() const {
         return static_cast<size_t>(ongoingJobs);
     }
 
-    size_t ThreadPool::countTotalJobs() {
+    size_t ThreadPool::countTotalJobs() const {
         return countQueuedJobs() + countOngoingJobs();
     }
 
     void ThreadPool::waitForAllJobsToFinish() {
-        {
-            std::unique_lock<std::mutex> jobQueueLock(jobQueueMutex);
-            condJobFinished.wait(jobQueueLock, [this](){
-                return countTotalJobs() == 0;
-            }); 
-        }
+        std::unique_lock<std::mutex> jobQueueLock(jobQueueMutex);
+        condJobFinished.wait(jobQueueLock, [this](){
+            return countTotalJobs() == 0;
+        });
     }
 
     void ThreadPool::clearQueue() {
@@ -202,31 +199,30 @@ namespace simpleThreadPool {
         if (newSize == workers.size()) {
             return;
         }
-        else {
-            queueJobAllowed = false;
 
-            waitForAllJobsToFinish();
+        queueJobAllowed = false;
 
-            shouldTerminateWorkers = true;
-            condQueue.notify_all();
+        waitForAllJobsToFinish();
 
-            for (auto& worker : workers) {
-                worker.join();
-            }
+        shouldTerminateWorkers = true;
+        condQueue.notify_all();
 
-            shouldTerminateWorkers = false;
-            
-            workers.clear();
-            workers.reserve(newSize);
-
-            for (unsigned i = 0; i < newSize; ++i) {
-                workers.emplace_back(&ThreadPool::workerThread, this);
-            }
-
-            queueJobAllowed = true;
-
-            return;
+        for (auto& worker : workers) {
+            worker.join();
         }
+
+        shouldTerminateWorkers = false;
+            
+        workers.clear();
+        workers.reserve(newSize);
+
+        for (unsigned i = 0; i < newSize; ++i) {
+            workers.emplace_back(&ThreadPool::workerThread, this);
+        }
+
+        queueJobAllowed = true;
+
+        return;
     }
 
     void ThreadPool::workerThread() {
