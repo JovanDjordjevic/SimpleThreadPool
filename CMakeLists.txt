@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.20)
 
 project(SimpleThreadPool VERSION 1.0.0 LANGUAGES CXX)
 
@@ -11,81 +11,57 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Debug")
 endif()
 
-set(CMAKE_CXX_STANDARD          17)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS        OFF)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 set(CMAKE_VERBOSE_MAKEFILE ON)
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake/)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)                   # NOTE: does nothing if generator is set to Visual Studio
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_OUTPUT_EXTENSION_REPLACE ON)
 
 # optional targets
-option(ENABLE_DOXYGEN "Create doxygen documentation target" OFF)
-option(ENABLE_TESTING "Build the test executables" ON)
-option(ENABLE_COVERAGE_REPORT "Create code coverage report for tests" ON)   # requires lcov for GNU and llvm-cov for [Apple]Clang compilers
+option(STP_ENABLE_DOXYGEN "Create doxygen documentation target" OFF)
+option(STP_ENABLE_BUILD_TESTS "Build the test executables" OFF)
+option(STP_ENABLE_BUILD_EXAMPLES "Build examples" OFF)
+option(STP_ENABLE_CALLGRIND_TARGETS "Create additional targets for callgrind/kcachegrind for executables" OFF)
+option(STP_ENABLE_STATIC_ANALYSIS "Create additional targets for explicit static analysis of targets" OFF)
 
-if(ENABLE_COVERAGE_REPORT AND NOT ENABLE_TESTING)
+# other build options
+option(STP_ENABLE_COVERAGE_REPORT "Create code coverage report for tests" OFF)
+option(STP_ENABLE_BRUTAL_COMPILE_OPTIONS "Add additional warning flags when building" OFF)
+option(STP_ENABLE_SANITIZERS "Enable sanitizers during compilation" OFF)
+
+if(STP_ENABLE_COVERAGE_REPORT AND NOT STP_ENABLE_BUILD_TESTS)
     message(FATAL_ERROR "Code coverage only available when building tests")
 endif()
 
-# compilers detection and flags
-if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS "8")
-        message(FATAL_ERROR "\nGNU v8 or later is required")
-    endif()
+if(STP_ENABLE_DOXYGEN)
+    # To generate html documentation, build the 'docs' target
+    include(doxy)
+    cmake_path(APPEND STP_DOXYFILE_PATH ${CMAKE_SOURCE_DIR} docs)
+    scm_create_docs_target(${STP_DOXYFILE_PATH})
+endif()
 
-    set(CMAKE_CXX_FLAGS_DEBUG "-Wall -Wextra -pedantic -O0")
-    set(CMAKE_CXX_FLAGS_RELEASE "-O3")
-elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-    if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS "6.0")
-        message(FATAL_ERROR "\nClang v6.0 or later is required")
-    endif()
-
-    set(CMAKE_CXX_FLAGS_DEBUG "-Wall -Wextra -pedantic -O0")
-    set(CMAKE_CXX_FLAGS_RELEASE "-O3")
-elseif(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
-    if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS "10.0")
-        message(FATAL_ERROR "\nAppleClang v10.0 or later is required")
-    endif()
-
-    set(CMAKE_CXX_FLAGS_DEBUG "-Wall -Wextra -pedantic -O0")
-    set(CMAKE_CXX_FLAGS_RELEASE "-O3")
-elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-    if(NOT MSVC_VERSION GREATER_EQUAL 1915)
-        message(FATAL_ERROR "\nMSVC++ v19.15 or later is required")
-    endif()
-
-    if(ENABLE_COVERAGE_REPORT)
-        message(FATAL_ERROR "\nCoverage report generation only supported on GNU and Clang compilers")
-    endif()
-
-    set(CMAKE_CXX_FLAGS_DEBUG_INIT "/Wall")
-    set(CMAKE_CXX_FLAGS_RELEASE_INIT "/Ox")
-else()
-    message(FATAL_ERROR "\n\
-        Currently supported compilers:\n\
-        - GNU v8 or above\n\
-        - Clang v6.0 or above\n\
-        - AppleClang v10.0 or above\n\
-        - MSVC v19.15 or above\n")
+if(STP_ENABLE_COVERAGE_REPORT)
+    # To generate html coverage report, build the 'ccov-all' target
+    message(STATUS "Adding code coverage")
+    set(CODE_COVERAGE ON)
+    include(code-coverage)
+    add_code_coverage_all_targets()
 endif()
 
 add_subdirectory(include)
 
-if(ENABLE_DOXYGEN)
-    include(docs)
+if(STP_ENABLE_BUILD_TESTS)
+    # run tests with ctest
+    message(STATUS "Building tests")
+    include(CTest)
+    add_subdirectory(tests)
 endif()
 
-if(ENABLE_TESTING)
-    if(ENABLE_COVERAGE_REPORT)
-        # To generate html report, build the ccov-all target
-        set(CODE_COVERAGE ON)
-        include(code-coverage)
-        add_code_coverage_all_targets()
-    endif()
-
-    include(CTest)
-    message(STATUS "Building tests")
-    add_subdirectory(tests)
+if(STP_ENABLE_BUILD_EXAMPLES)
+    # you can find example executables in build/examples/... (depending on the cmake generator)
+    message(STATUS "Building examples")
+    add_subdirectory(examples)
 endif()
