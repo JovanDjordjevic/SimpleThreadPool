@@ -5,12 +5,19 @@
 
 #include "simpleThreadPool/simpleThreadPool.hpp"
 
+void f (std::string& s);
+void f1 (int x, int& y, std::string z);
+void hello();
+void hello1(const std::vector<int>& x);
+double foo();
+int foo1(int x);
+
 void f (std::string& s) {
     s = "\nbind f\n";
     std::cout << s << std::endl;
 }
 
-void f1 (int x, int& y, std::string z) {
+void f1 ([[maybe_unused]] int x, int& y, std::string z) {
     x = 5;
     y = 7;
     z = "aaa";
@@ -22,7 +29,7 @@ void hello() {
 }
 
 // does not return, with arguments
-void hello1(const std::vector<int>& x) {}
+void hello1([[maybe_unused]] const std::vector<int>& x) {}
 
 // returns, no arguments
 double foo() {
@@ -105,9 +112,9 @@ int main() {
     std::cout << "Pool size: " << pool.getPoolSize() << std::endl;
 
     std::vector<std::function<int()>> v1 = {std::bind(foo1, 2)};
-    v1.emplace_back(std::bind([](const int x){ return x; }, 3));
-    v1.emplace_back(std::bind([](bool b){ return 12; }, true));
-    v1.emplace_back([](){ return 22; });
+    v1.emplace_back(std::bind([](const int x) noexcept { return x; }, 3));
+    v1.emplace_back(std::bind([]([[maybe_unused]] bool b) noexcept { return 12; }, true));
+    v1.emplace_back([]() noexcept { return 22; });
 
     auto futures1 = pool.queueAndWaitForJobs(v1);
 
@@ -116,7 +123,7 @@ int main() {
     }
     std::cout << std::endl;
 
-    std::vector<std::function<void()>> v2 = {std::bind([](int x){return;}, 2), [](){}};
+    std::vector<std::function<void()>> v2 = {std::bind([]([[maybe_unused]] int x) noexcept {return;}, 2), []() noexcept {}};
     auto futures2 = pool.queueAndWaitForJobs(v2);
 
     for (auto& fut : futures2) {

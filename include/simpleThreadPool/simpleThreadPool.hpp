@@ -1,5 +1,5 @@
-#ifndef __SIMPLE_THREAD_POOL__
-#define __SIMPLE_THREAD_POOL__
+#ifndef SIMPLE_THREAD_POOL_HPP
+#define SIMPLE_THREAD_POOL_HPP
 
 #include <atomic>
 #include <condition_variable>
@@ -10,11 +10,12 @@
 #include <thread>
 #include <vector>
 
-//------------------------------------- API -------------------------------------
+// ============================================================================================================================================
+// =================================================================== API ====================================================================
+// ============================================================================================================================================
 
 /// @brief Namespace containing all relevant classes and functions
 namespace simpleThreadPool {
-
     /// @brief Class representing the thread pool
     /// @details The user can specify number of execution threads and add jobs to be executed by them
     class ThreadPool {
@@ -87,11 +88,21 @@ namespace simpleThreadPool {
     };
 } // namespace simpleThreadPool
 
-//------------------------------------- IMPLEMENTATION -------------------------------------
+// ============================================================================================================================================
+// ============================================================== IMPLEMENTATION ==============================================================
+// ============================================================================================================================================
 
 namespace simpleThreadPool {
     ThreadPool::ThreadPool(const unsigned numThreads) 
-        : shouldTerminateWorkers(false), queueJobAllowed(true), ongoingJobs(0), jobQueueSize(0), workers(numThreads)
+        : shouldTerminateWorkers(false),
+          queueJobAllowed(true),
+          ongoingJobs(0),
+          jobQueueSize(0),
+          workers(numThreads),
+          jobQueueMutex{},
+          condQueue{},
+          condJobFinished{},
+          jobQueue{}
     {
         for (unsigned i = 0; i < numThreads; ++i) {
             workers.at(i) = std::thread(&ThreadPool::workerThread, this);
@@ -254,4 +265,4 @@ namespace simpleThreadPool {
     }
 } // namespace simpleThreadPool
 
-#endif // __SIMPLE_THREAD_POOL__
+#endif // SIMPLE_THREAD_POOL_HPP
