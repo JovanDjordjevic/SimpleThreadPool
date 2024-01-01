@@ -93,7 +93,7 @@ namespace simpleThreadPool {
 // ============================================================================================================================================
 
 namespace simpleThreadPool {
-    ThreadPool::ThreadPool(const unsigned numThreads) 
+    inline ThreadPool::ThreadPool(const unsigned numThreads) 
         : shouldTerminateWorkers(false),
           queueJobAllowed(true),
           ongoingJobs(0),
@@ -109,7 +109,7 @@ namespace simpleThreadPool {
         }
     }
 
-    ThreadPool::~ThreadPool() {
+    inline ThreadPool::~ThreadPool() {
         queueJobAllowed = false;
 
         waitForAllJobsToFinish();
@@ -123,7 +123,7 @@ namespace simpleThreadPool {
     }
 
     template <typename F, typename... Args, typename R>
-    std::future<R> ThreadPool::queueJob(const F& func, const Args&... args) {
+    inline std::future<R> ThreadPool::queueJob(const F& func, const Args&... args) {
         std::shared_ptr<std::promise<R>> jobPromise = std::make_shared<std::promise<R>>();
         std::future<R> jobFuture = jobPromise->get_future();
 
@@ -161,7 +161,7 @@ namespace simpleThreadPool {
     }
 
     template <typename R>
-    std::vector<std::future<R>> ThreadPool::queueAndWaitForJobs(const std::vector<std::function<R()>>& functions) {
+    inline std::vector<std::future<R>> ThreadPool::queueAndWaitForJobs(const std::vector<std::function<R()>>& functions) {
         std::vector<std::future<R>> futures;
         futures.reserve(functions.size());
 
@@ -176,37 +176,37 @@ namespace simpleThreadPool {
         return futures;
     }
 
-    size_t ThreadPool::countQueuedJobs() const {
+    inline size_t ThreadPool::countQueuedJobs() const {
         return static_cast<size_t>(jobQueueSize);
     }
 
-    size_t ThreadPool::countOngoingJobs() const {
+    inline size_t ThreadPool::countOngoingJobs() const {
         return static_cast<size_t>(ongoingJobs);
     }
 
-    size_t ThreadPool::countTotalJobs() const {
+    inline size_t ThreadPool::countTotalJobs() const {
         return countQueuedJobs() + countOngoingJobs();
     }
 
-    void ThreadPool::waitForAllJobsToFinish() {
+    inline void ThreadPool::waitForAllJobsToFinish() {
         std::unique_lock<std::mutex> jobQueueLock(jobQueueMutex);
         condJobFinished.wait(jobQueueLock, [this](){
             return countTotalJobs() == 0;
         });
     }
 
-    void ThreadPool::clearQueue() {
+    inline void ThreadPool::clearQueue() {
         std::unique_lock<std::mutex> jobQueueLock(jobQueueMutex);
         jobQueue = {};
         jobQueueSize = 0;
         return;
     }
 
-    size_t ThreadPool::getPoolSize() const {
+    inline size_t ThreadPool::getPoolSize() const {
         return workers.size();
     }
     
-    void ThreadPool::resizePool(const size_t newSize) {
+    inline void ThreadPool::resizePool(const size_t newSize) {
         if (newSize == workers.size()) {
             return;
         }
@@ -236,7 +236,7 @@ namespace simpleThreadPool {
         return;
     }
 
-    void ThreadPool::workerThread() {
+    inline void ThreadPool::workerThread() {
         std::function<void()> job;
 
         while (true) {
